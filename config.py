@@ -24,8 +24,7 @@ class Config:
     HISTORICAL_DAYS = 7  # Изменено с месяцев на дни для быстрой работы
     KLINE_INTERVAL = "5"  # 5 minutes
     
-    # Market data symbols
-    BTC_SYMBOL = "BTCUSDT"
+    # Market data symbols (для анализа корреляций)
     GOLD_SYMBOL = "XAUTUSDT"
     SILVER_SYMBOL = "XAGUSDT"
     

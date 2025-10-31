@@ -38,10 +38,10 @@ class TradingAgent:
         logger.info("Начало сбора рыночных данных...")
         
         try:
-            # Получаем исторические данные
-            logger.info("Получение данных BTC/USDT...")
-            btc_data = self.bybit.get_historical_data(
-                config.BTC_SYMBOL,
+            # Получаем исторические данные для торгуемой пары
+            logger.info(f"Получение данных {self.trading_pair}...")
+            trading_pair_data = self.bybit.get_historical_data(
+                self.trading_pair,
                 config.HISTORICAL_DAYS
             )
             
@@ -71,7 +71,8 @@ class TradingAgent:
             logger.info(f"Текущая цена {self.trading_pair}: {current_price} USDT")
             
             return {
-                "btc_data": btc_data,
+                "trading_pair_data": trading_pair_data,
+                "trading_pair_symbol": self.trading_pair,
                 "gold_data": gold_data,
                 "silver_data": silver_data,
                 "polymarket_info": polymarket_info,
@@ -96,7 +97,8 @@ class TradingAgent:
         
         # Подготавливаем данные
         formatted_data = self.deepseek.prepare_market_data(
-            market_data["btc_data"],
+            market_data["trading_pair_data"],
+            market_data["trading_pair_symbol"],
             market_data["gold_data"],
             market_data["silver_data"],
             market_data["polymarket_info"]
@@ -107,6 +109,7 @@ class TradingAgent:
         # Получаем рекомендацию
         recommendation = self.deepseek.get_trading_recommendation(
             formatted_data,
+            market_data["trading_pair_symbol"],
             market_data["current_price"],
             self.max_trade_amount
         )
@@ -161,19 +164,20 @@ class TradingAgent:
             )
             quantity_usdt = self.max_trade_amount
         
-        # Рассчитываем количество BTC
+        # Рассчитываем количество криптовалюты
+        base_currency = self.trading_pair.replace("USDT", "")  # Извлекаем базовую валюту
         if action == "buy":
-            qty_btc = quantity_usdt / current_price
+            qty_crypto = quantity_usdt / current_price
             side = "Buy"
             logger.info(
-                f"Выполнение покупки: {qty_btc:.6f} BTC на сумму {quantity_usdt} USDT "
+                f"Выполнение покупки: {qty_crypto:.6f} {base_currency} на сумму {quantity_usdt} USDT "
                 f"по цене ~{current_price} USDT"
             )
         elif action == "sell":
-            qty_btc = quantity_usdt / current_price
+            qty_crypto = quantity_usdt / current_price
             side = "Sell"
             logger.info(
-                f"Выполнение продажи: {qty_btc:.6f} BTC на сумму {quantity_usdt} USDT "
+                f"Выполнение продажи: {qty_crypto:.6f} {base_currency} на сумму {quantity_usdt} USDT "
                 f"по цене ~{current_price} USDT"
             )
         else:
@@ -186,7 +190,7 @@ class TradingAgent:
         result = self.bybit.place_order(
             symbol=self.trading_pair,
             side=side,
-            qty=qty_btc,
+            qty=qty_crypto,
             order_type="Market"
         )
         

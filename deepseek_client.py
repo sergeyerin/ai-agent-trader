@@ -14,7 +14,8 @@ class DeepSeekClient:
     
     def prepare_market_data(
         self,
-        btc_data: pd.DataFrame,
+        trading_pair_data: pd.DataFrame,
+        trading_pair_symbol: str,
         gold_data: pd.DataFrame,
         silver_data: pd.DataFrame,
         polymarket_info: str
@@ -23,7 +24,8 @@ class DeepSeekClient:
         Подготовка данных рынка для отправки в DeepSeek.
         
         Args:
-            btc_data: Данные по BTC/USDT
+            trading_pair_data: Данные по торгуемой паре
+            trading_pair_symbol: Символ торгуемой пары
             gold_data: Данные по золоту
             silver_data: Данные по серебру
             polymarket_info: Информация с Polymarket
@@ -33,15 +35,15 @@ class DeepSeekClient:
         """
         data_summary = []
         
-        # BTC/USDT
-        if not btc_data.empty:
-            btc_recent = btc_data.tail(min(288, len(btc_data)))  # Последние 288 свечей (24 часа) или все доступные
-            data_summary.append(f"=== BTC/USDT (последние {len(btc_recent)} свечей) ===")
-            data_summary.append(f"Текущая цена: {btc_recent['close'].iloc[-1]:.2f} USDT")
-            data_summary.append(f"Минимум за период: {btc_recent['low'].min():.2f} USDT")
-            data_summary.append(f"Максимум за период: {btc_recent['high'].max():.2f} USDT")
-            data_summary.append(f"Средний объем: {btc_recent['volume'].mean():.2f}")
-            data_summary.append(f"Изменение за период: {((btc_recent['close'].iloc[-1] / btc_recent['open'].iloc[0] - 1) * 100):.2f}%")
+        # Торгуемая пара
+        if not trading_pair_data.empty:
+            recent_data = trading_pair_data.tail(min(288, len(trading_pair_data)))  # Последние 288 свечей (24 часа) или все доступные
+            data_summary.append(f"=== {trading_pair_symbol} (последние {len(recent_data)} свечей) ===")
+            data_summary.append(f"Текущая цена: {recent_data['close'].iloc[-1]:.2f} USDT")
+            data_summary.append(f"Минимум за период: {recent_data['low'].min():.2f} USDT")
+            data_summary.append(f"Максимум за период: {recent_data['high'].max():.2f} USDT")
+            data_summary.append(f"Средний объем: {recent_data['volume'].mean():.2f}")
+            data_summary.append(f"Изменение за период: {((recent_data['close'].iloc[-1] / recent_data['open'].iloc[0] - 1) * 100):.2f}%")
             data_summary.append("")
         
         # Золото
@@ -69,6 +71,7 @@ class DeepSeekClient:
     def get_trading_recommendation(
         self,
         market_data: str,
+        trading_pair_symbol: str,
         current_price: float,
         max_trade_amount: float
     ) -> Optional[Dict]:
@@ -77,12 +80,16 @@ class DeepSeekClient:
         
         Args:
             market_data: Форматированные данные рынка
-            current_price: Текущая цена BTC
+            trading_pair_symbol: Символ торгуемой пары
+            current_price: Текущая цена
             max_trade_amount: Максимальная сумма сделки в USDT
         
         Returns:
             Словарь с рекомендацией или None
         """
+        # Извлекаем базовую валюту
+        base_currency = trading_pair_symbol.replace("USDT", "")
+        
         prompt = f"""Ты успешный трейдер криптовалют с многолетним опытом анализа рынков.
 
 У тебя есть следующие исторические данные для анализа:
@@ -90,13 +97,13 @@ class DeepSeekClient:
 {market_data}
 
 ТЕКУЩИЕ ПАРАМЕТРЫ:
-- Текущая цена BTC: {current_price:.2f} USDT
+- Текущая цена {base_currency}: {current_price:.2f} USDT
 - Максимальная сумма сделки: {max_trade_amount} USDT
-- Торговая пара: BTC/USDT
+- Торговая пара: {trading_pair_symbol}
 
 ЗАДАЧА:
 На основании предоставленных данных (включая корреляцию с золотом, серебром и геополитической ситуацией) 
-необходимо принять решение о покупке, продаже или бездействии с BTC.
+необходимо принять решение о покупке, продаже или бездействии с {base_currency}.
 
 Учитывай:
 1. Технический анализ (тренды, уровни поддержки/сопротивления)
