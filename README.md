@@ -22,11 +22,12 @@
 ## Особенности
 
 ✅ **Универсальная торговля** - поддержка любой торговой пары (BTC, ETH, SOL, LTC и др.)
-✅ **AI-анализ** - использование DeepSeek для принятия торговых решений
+✅ **AI-анализ** - использование DeepSeek или OpenRouter для принятия торговых решений
 ✅ **Корреляционный анализ** - учет движения золота и серебра
 ✅ **Геополитический фактор** - анализ данных с Polymarket
 ✅ **Автоматизация** - запуск каждые 5 минут по расписанию
 ✅ **Безопасность** - таймауты, лимиты и детальное логирование
+✅ **Гибкость** - выбор между DeepSeek напрямую или через OpenRouter
 
 ## Структура проекта
 
@@ -67,9 +68,18 @@ BYBIT_API_KEY=your_api_key_here
 BYBIT_API_SECRET=your_api_secret_here
 BYBIT_TESTNET=false  # true для тестовой сети, false для продакшена
 
-# DeepSeek API
+# AI Provider (выберите deepseek или openrouter)
+AI_PROVIDER=deepseek
+
+# DeepSeek API (прямое подключение)
 DEEPSEEK_API_KEY=your_deepseek_api_key_here
 DEEPSEEK_API_BASE=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+
+# OpenRouter API (агрегатор моделей)
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_API_BASE=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=deepseek/deepseek-chat
 
 # Trading parameters
 MAX_TRADING_VOLUME=100      # Максимальный доступный объем средств (USDT)
@@ -86,10 +96,26 @@ INTERVAL_MINUTES=5          # Интервал запуска агента (ми
 3. Создайте новый API ключ с правами на торговлю
 4. **Важно**: Для тестирования используйте `BYBIT_TESTNET=true`
 
-#### DeepSeek API:
+#### AI Provider (выберите один из вариантов):
+
+**Вариант 1: DeepSeek напрямую**
 1. Зарегистрируйтесь на [DeepSeek](https://platform.deepseek.com/)
 2. Получите API ключ в личном кабинете
-3. Скопируйте ключ в `.env`
+3. Установите `AI_PROVIDER=deepseek` в `.env`
+4. Скопируйте ключ в `DEEPSEEK_API_KEY`
+
+**Вариант 2: OpenRouter (агрегатор моделей)**
+1. Зарегистрируйтесь на [OpenRouter](https://openrouter.ai/)
+2. Полните баланс (старт от $10)
+3. Получите API ключ
+4. Установите `AI_PROVIDER=openrouter` в `.env`
+5. Скопируйте ключ в `OPENROUTER_API_KEY`
+
+**Преимущества OpenRouter:**
+- Доступ к 500+ моделям через единый API
+- Автоматическое переключение между провайдерами
+- Высокая доступность (99.9% uptime)
+- Конкурентные цены
 
 ## Запуск
 
@@ -118,6 +144,7 @@ nohup python main.py > output.log 2>&1 &
 | `MAX_TRADE_AMOUNT` | Максимальная сумма одной сделки (USDT) | 10 |
 | `INTERVAL_MINUTES` | Интервал запуска агента (минуты) | 5 |
 | `HISTORICAL_DAYS` | Количество дней исторических данных | 7 |
+| `AI_PROVIDER` | Провайдер AI (“deepseek” или “openrouter”) | deepseek |
 
 ## Логирование
 

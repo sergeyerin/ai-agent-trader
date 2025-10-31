@@ -10,9 +10,18 @@ class Config:
     BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
     BYBIT_TESTNET = os.getenv("BYBIT_TESTNET", "false").lower() == "true"
     
+    # AI Provider (DeepSeek or OpenRouter)
+    AI_PROVIDER = os.getenv("AI_PROVIDER", "deepseek")  # "deepseek" или "openrouter"
+    
     # DeepSeek
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
     DEEPSEEK_API_BASE = os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com")
+    DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+    
+    # OpenRouter
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+    OPENROUTER_API_BASE = os.getenv("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
+    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat")
     
     # Trading parameters
     MAX_TRADING_VOLUME = float(os.getenv("MAX_TRADING_VOLUME", "100"))

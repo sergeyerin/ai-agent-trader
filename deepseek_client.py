@@ -1,16 +1,36 @@
 from openai import OpenAI
 import pandas as pd
 import json
+import logging
 from typing import Dict, Optional, Tuple
 from config import config
+
+logger = logging.getLogger(__name__)
 
 
 class DeepSeekClient:
     def __init__(self):
-        self.client = OpenAI(
-            api_key=config.DEEPSEEK_API_KEY,
-            base_url=config.DEEPSEEK_API_BASE
-        )
+        self.provider = config.AI_PROVIDER.lower()
+        
+        if self.provider == "openrouter":
+            logger.info("Использование OpenRouter для доступа к AI моделям")
+            self.client = OpenAI(
+                api_key=config.OPENROUTER_API_KEY,
+                base_url=config.OPENROUTER_API_BASE
+            )
+            self.model = config.OPENROUTER_MODEL
+            self.extra_headers = {
+                "HTTP-Referer": "https://github.com/sergeyerin/ai-agent-trader",
+                "X-Title": "AI Trading Agent"
+            }
+        else:  # deepseek
+            logger.info("Использование DeepSeek напрямую")
+            self.client = OpenAI(
+                api_key=config.DEEPSEEK_API_KEY,
+                base_url=config.DEEPSEEK_API_BASE
+            )
+            self.model = config.DEEPSEEK_MODEL
+            self.extra_headers = {}
     
     def prepare_market_data(
         self,
@@ -131,15 +151,23 @@ class DeepSeekClient:
 ВАЖНО: Ответь ТОЛЬКО JSON, без дополнительного текста."""
 
         try:
-            response = self.client.chat.completions.create(
-                model="deepseek-chat",
-                messages=[
+            # Подготовка параметров запроса
+            request_params = {
+                "model": self.model,
+                "messages": [
                     {"role": "system", "content": "Ты профессиональный трейдер криптовалют. Отвечай только в формате JSON."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.7,
-                max_tokens=500
-            )
+                "temperature": 0.7,
+                "max_tokens": 500
+            }
+            
+            # Добавляем extra_headers для OpenRouter
+            if self.extra_headers:
+                request_params["extra_headers"] = self.extra_headers
+            
+            logger.info(f"Отправка запроса в {self.provider} (модель: {self.model})")
+            response = self.client.chat.completions.create(**request_params)
             
             response_text = response.choices[0].message.content.strip()
             
