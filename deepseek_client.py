@@ -35,8 +35,8 @@ class DeepSeekClient:
         
         # BTC/USDT
         if not btc_data.empty:
-            btc_recent = btc_data.tail(100)  # Последние 100 свечей (примерно 8 часов)
-            data_summary.append("=== BTC/USDT (последние 100 свечей) ===")
+            btc_recent = btc_data.tail(min(288, len(btc_data)))  # Последние 288 свечей (24 часа) или все доступные
+            data_summary.append(f"=== BTC/USDT (последние {len(btc_recent)} свечей) ===")
             data_summary.append(f"Текущая цена: {btc_recent['close'].iloc[-1]:.2f} USDT")
             data_summary.append(f"Минимум за период: {btc_recent['low'].min():.2f} USDT")
             data_summary.append(f"Максимум за период: {btc_recent['high'].max():.2f} USDT")
@@ -46,16 +46,16 @@ class DeepSeekClient:
         
         # Золото
         if not gold_data.empty:
-            gold_recent = gold_data.tail(100)
-            data_summary.append("=== Золото XAUT/USDT (последние 100 свечей) ===")
+            gold_recent = gold_data.tail(min(288, len(gold_data)))
+            data_summary.append(f"=== Золото XAUT/USDT (последние {len(gold_recent)} свечей) ===")
             data_summary.append(f"Текущая цена: {gold_recent['close'].iloc[-1]:.2f} USDT")
             data_summary.append(f"Изменение за период: {((gold_recent['close'].iloc[-1] / gold_recent['open'].iloc[0] - 1) * 100):.2f}%")
             data_summary.append("")
         
         # Серебро
         if not silver_data.empty:
-            silver_recent = silver_data.tail(100)
-            data_summary.append("=== Серебро XAGUSD (последние 100 свечей) ===")
+            silver_recent = silver_data.tail(min(288, len(silver_data)))
+            data_summary.append(f"=== Серебро XAGUSD (последние {len(silver_recent)} свечей) ===")
             data_summary.append(f"Текущая цена: {silver_recent['close'].iloc[-1]:.2f} USD")
             data_summary.append(f"Изменение за период: {((silver_recent['close'].iloc[-1] / silver_recent['open'].iloc[0] - 1) * 100):.2f}%")
             data_summary.append("")

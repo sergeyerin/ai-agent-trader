@@ -2,8 +2,11 @@ from pybit.unified_trading import HTTP
 from datetime import datetime, timedelta
 import time
 import pandas as pd
+import logging
 from typing import List, Dict, Optional
 from config import config
+
+logger = logging.getLogger(__name__)
 
 
 class BybitClient:
@@ -12,9 +15,10 @@ class BybitClient:
             testnet=config.BYBIT_TESTNET,
             api_key=config.BYBIT_API_KEY,
             api_secret=config.BYBIT_API_SECRET,
+            timeout=30,  # Добавляем таймаут 30 секунд
         )
     
-    def get_klines(self, symbol: str, interval: str, start_time: int, end_time: int) -> List[Dict]:
+    def get_klines(self, symbol: str, interval: str, start_time: int, end_time: int, max_requests: int = 50) -> List[Dict]:
         """
         Получение исторических данных (свечей) для указанного символа.
         
@@ -23,65 +27,82 @@ class BybitClient:
             interval: Интервал свечи (5 = 5 минут)
             start_time: Время начала в миллисекундах
             end_time: Время окончания в миллисекундах
+            max_requests: Максимальное количество запросов (защита от бесконечного цикла)
         
         Returns:
             Список свечей
         """
         all_klines = []
         current_start = start_time
+        request_count = 0
+        
+        logger.info(f"Начало загрузки данных для {symbol}...")
         
         # Bybit ограничивает количество записей за запрос, поэтому делаем пагинацию
-        while current_start < end_time:
+        while current_start < end_time and request_count < max_requests:
             try:
+                request_count += 1
+                logger.debug(f"Запрос {request_count}/{max_requests} для {symbol}")
+                
                 response = self.client.get_kline(
                     category="spot",
                     symbol=symbol,
                     interval=interval,
                     start=current_start,
                     end=end_time,
-                    limit=1000
+                    limit=200  # Уменьшаем лимит для более быстрых запросов
                 )
                 
                 if response["retCode"] == 0 and response["result"]["list"]:
                     klines = response["result"]["list"]
                     all_klines.extend(klines)
+                    logger.debug(f"Получено {len(klines)} свечей для {symbol}, всего: {len(all_klines)}")
                     
                     # Получаем последнюю временную метку для следующего запроса
                     last_timestamp = int(klines[-1][0])
                     
                     # Если получили меньше лимита, значит данных больше нет
-                    if len(klines) < 1000:
+                    if len(klines) < 200:
+                        logger.info(f"Загрузка данных для {symbol} завершена. Всего свечей: {len(all_klines)}")
                         break
                     
                     current_start = last_timestamp + 1
-                    time.sleep(0.1)  # Избегаем rate limit
+                    time.sleep(0.2)  # Увеличиваем задержку для избежания rate limit
                 else:
+                    logger.warning(f"Пустой ответ от Bybit для {symbol}: {response.get('retMsg', 'Unknown error')}")
                     break
                     
             except Exception as e:
-                print(f"Ошибка при получении данных для {symbol}: {e}")
+                logger.error(f"Ошибка при получении данных для {symbol}: {e}")
                 break
+        
+        if request_count >= max_requests:
+            logger.warning(f"Достигнут лимит запросов ({max_requests}) для {symbol}")
         
         return all_klines
     
-    def get_historical_data(self, symbol: str, months: int = 3) -> pd.DataFrame:
+    def get_historical_data(self, symbol: str, days: int = 7) -> pd.DataFrame:
         """
-        Получение исторических данных за указанное количество месяцев.
+        Получение исторических данных за указанное количество дней.
         
         Args:
             symbol: Торговая пара
-            months: Количество месяцев истории
+            days: Количество дней истории (по умолчанию 7 для быстрой работы)
         
         Returns:
             DataFrame с историческими данными
         """
+        logger.info(f"Запрос данных для {symbol} за последние {days} дней")
         end_time = int(datetime.now().timestamp() * 1000)
-        start_time = int((datetime.now() - timedelta(days=months * 30)).timestamp() * 1000)
+        start_time = int((datetime.now() - timedelta(days=days)).timestamp() * 1000)
         
         klines = self.get_klines(symbol, config.KLINE_INTERVAL, start_time, end_time)
         
         if not klines:
+            logger.warning(f"Не получено данных для {symbol}")
             return pd.DataFrame()
+        
+        logger.info(f"Получено {len(klines)} свечей для {symbol}")
         
         # Преобразуем в DataFrame
         df = pd.DataFrame(klines, columns=[

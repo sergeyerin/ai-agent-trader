@@ -42,19 +42,19 @@ class TradingAgent:
             logger.info("Получение данных BTC/USDT...")
             btc_data = self.bybit.get_historical_data(
                 config.BTC_SYMBOL,
-                config.HISTORICAL_MONTHS
+                config.HISTORICAL_DAYS
             )
             
             logger.info("Получение данных золота XAUT/USDT...")
             gold_data = self.bybit.get_historical_data(
                 config.GOLD_SYMBOL,
-                config.HISTORICAL_MONTHS
+                config.HISTORICAL_DAYS
             )
             
             logger.info("Получение данных серебра XAGUSD...")
             silver_data = self.bybit.get_historical_data(
                 config.SILVER_SYMBOL,
-                config.HISTORICAL_MONTHS
+                config.HISTORICAL_DAYS
             )
             
             # Получаем данные Polymarket

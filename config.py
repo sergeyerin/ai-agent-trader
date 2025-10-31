@@ -21,7 +21,7 @@ class Config:
     INTERVAL_MINUTES = int(os.getenv("INTERVAL_MINUTES", "5"))
     
     # Data collection parameters
-    HISTORICAL_MONTHS = 3
+    HISTORICAL_DAYS = 7  # Изменено с месяцев на дни для быстрой работы
     KLINE_INTERVAL = "5"  # 5 minutes
     
     # Market data symbols
