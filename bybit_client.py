@@ -35,6 +35,7 @@ class BybitClient:
         all_klines = []
         current_start = start_time
         request_count = 0
+        seen_timestamps = set()  # Для отслеживания дубликатов
         
         logger.info(f"Начало загрузки данных для {symbol}...")
         
@@ -55,8 +56,22 @@ class BybitClient:
                 
                 if response["retCode"] == 0 and response["result"]["list"]:
                     klines = response["result"]["list"]
-                    all_klines.extend(klines)
-                    logger.debug(f"Получено {len(klines)} свечей для {symbol}, всего: {len(all_klines)}")
+                    
+                    # Фильтруем дубликаты
+                    new_klines = []
+                    for kline in klines:
+                        timestamp = int(kline[0])
+                        if timestamp not in seen_timestamps:
+                            seen_timestamps.add(timestamp)
+                            new_klines.append(kline)
+                    
+                    # Если нет новых данных, выходим из цикла
+                    if not new_klines:
+                        logger.info(f"Получены только дубликаты. Загрузка завершена. Всего свечей: {len(all_klines)}")
+                        break
+                    
+                    all_klines.extend(new_klines)
+                    logger.debug(f"Получено {len(new_klines)} новых свечей для {symbol}, всего: {len(all_klines)}")
                     
                     # Получаем последнюю временную метку для следующего запроса
                     last_timestamp = int(klines[-1][0])
@@ -64,6 +79,11 @@ class BybitClient:
                     # Если получили меньше лимита, значит данных больше нет
                     if len(klines) < 200:
                         logger.info(f"Загрузка данных для {symbol} завершена. Всего свечей: {len(all_klines)}")
+                        break
+                    
+                    # Проверяем, что timestamp действительно изменился
+                    if last_timestamp <= current_start:
+                        logger.warning(f"Timestamp не изменился ({last_timestamp}), выход из цикла")
                         break
                     
                     current_start = last_timestamp + 1
