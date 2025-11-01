@@ -41,6 +41,9 @@ env/
 *.log
 trading_agent.log
 
+# Charts
+charts/
+
 # Jupyter Notebook
 .ipynb_checkpoints
 

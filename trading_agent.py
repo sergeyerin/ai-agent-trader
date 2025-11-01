@@ -101,26 +101,27 @@ class TradingAgent:
         """
         logger.info("Подготовка данных для DeepSeek...")
         
-        # Создаем графики для дополнительных инструментов (BTC, ETH, и т.д.)
+        # Создаем графики для всех доступных инструментов (исключая SOL)
         logger.info("Создание графиков для анализа...")
         chart_images = {}
         
-        # Список инструментов для создания графиков (исключая SOL)
-        chart_symbols = ["BTCUSDT", "ETHUSDT", "TWTUSDT", "MNTUSDT", "XAUUSDT"]
-        
-        for symbol in chart_symbols:
-            if symbol in market_data["trading_pairs_data"]:
+        # Создаем графики для всех инструментов кроме SOLUSDT
+        for symbol in market_data["trading_pairs_data"].keys():
+            if symbol != "SOLUSDT":  # Исключаем основную торговую пару
                 pair_data = market_data["trading_pairs_data"][symbol]["data"]
                 if not pair_data.empty:
                     logger.info(f"Создание графика для {symbol}...")
-                    chart_base64 = self.deepseek.create_chart(
-                        pair_data,
-                        symbol,
-                        symbol.replace("USDT", "/USDT")
-                    )
-                    if chart_base64:
-                        chart_images[symbol] = chart_base64
-                        logger.info(f"График для {symbol} успешно создан")
+                    try:
+                        chart_base64 = self.deepseek.create_chart(
+                            pair_data,
+                            symbol,
+                            symbol.replace("USDT", "/USDT")
+                        )
+                        if chart_base64:
+                            chart_images[symbol] = chart_base64
+                            logger.info(f"График для {symbol} успешно создан")
+                    except Exception as e:
+                        logger.error(f"Ошибка при создании графика для {symbol}: {e}")
         
         logger.info(f"Создано {len(chart_images)} графиков")
         

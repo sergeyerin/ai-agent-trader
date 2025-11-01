@@ -5,6 +5,10 @@ import logging
 import httpx
 import base64
 import io
+import os
+from datetime import datetime
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from typing import Dict, Optional, Tuple, List
 from config import config
 
@@ -90,6 +94,19 @@ class DeepSeekClient:
             plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45)
             
             plt.tight_layout()
+            
+            # Создаем директорию для графиков если её нет
+            charts_dir = "charts"
+            if not os.path.exists(charts_dir):
+                os.makedirs(charts_dir)
+            
+            # Генерируем имя файла с временной меткой
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            chart_filename = f"{charts_dir}/{symbol}_{timestamp}.png"
+            
+            # Сохраняем график на диск
+            plt.savefig(chart_filename, format='png', dpi=100, bbox_inches='tight')
+            logger.info(f"График сохранен: {chart_filename}")
             
             # Сохраняем в буфер и кодируем в base64
             buffer = io.BytesIO()
