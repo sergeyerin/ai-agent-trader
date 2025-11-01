@@ -35,7 +35,7 @@ def main():
     logger.info("=" * 80)
     logger.info("Запуск торгового агента")
     logger.info(f"Интервал запуска: каждые {config.INTERVAL_MINUTES} минут")
-    logger.info(f"Торговая пара: {config.TRADING_PAIR}")
+    logger.info(f"Торговые инструменты: {', '.join(config.TRADING_PAIRS)}")
     logger.info(f"Максимальный объем торговли: {config.MAX_TRADING_VOLUME} USDT")
     logger.info(f"Максимальная сумма сделки: {config.MAX_TRADE_AMOUNT} USDT")
     logger.info("=" * 80)

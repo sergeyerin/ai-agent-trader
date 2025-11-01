@@ -25,7 +25,11 @@ class Config:
     
     # Trading parameters
     MAX_TRADING_VOLUME = float(os.getenv("MAX_TRADING_VOLUME", "100"))
-    TRADING_PAIR = os.getenv("TRADING_PAIR", "BTCUSDT")
+    # Список торговых инструментов для анализа и торговли
+    TRADING_PAIRS = os.getenv(
+        "TRADING_PAIRS", 
+        "SOLUSDT,BTCUSDT,ETHUSDT,TWTUSDT,MNTUSDT,XAUUSDT"
+    ).split(",")
     MAX_TRADE_AMOUNT = float(os.getenv("MAX_TRADE_AMOUNT", "10"))
     INTERVAL_MINUTES = int(os.getenv("INTERVAL_MINUTES", "5"))
     
