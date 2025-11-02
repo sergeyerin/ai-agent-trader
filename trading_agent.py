@@ -27,6 +27,8 @@ class TradingAgent:
         logger.info(f"Торговый агент инициализирован. Инструменты: {', '.join(self.trading_pairs)}")
         logger.info(f"Максимальный объем торговли: {self.max_trading_volume} USDT")
         logger.info(f"Максимальная сумма сделки: {self.max_trade_amount} USDT")
+        logger.info(f"AI анализ: {'ENABLED' if config.ENABLE_AI_ANALYSIS else 'DISABLED'}")
+        logger.info(f"Реальная торговля: {'ENABLED' if config.ENABLE_TRADING else 'DISABLED'}")
     
     def collect_market_data(self) -> Optional[Dict]:
         """
@@ -99,6 +101,12 @@ class TradingAgent:
         Returns:
             Словарь с рекомендациями для каждого инструмента
         """
+        if not config.ENABLE_AI_ANALYSIS:
+            logger.warning("Анализ AI отключен. Возвращаем пустые рекомендации.")
+            # Возвращаем mock-рекомендации "hold" для всех пар
+            return {pair: {"action": "hold", "reasoning": "AI analysis disabled"} 
+                    for pair in market_data["trading_pairs_data"].keys()}
+        
         logger.info("Подготовка данных для DeepSeek...")
         
         # Создаем графики для всех доступных инструментов (исключая SOL)
@@ -222,6 +230,11 @@ class TradingAgent:
             return False
         
         logger.info(f"Причина: {recommendation.get('reasoning', 'Не указана')}")
+        
+        # Проверяем флаг торговли
+        if not config.ENABLE_TRADING:
+            logger.warning("Реальная торговля отключена. Ордер НЕ был отправлен в Bybit.")
+            return True
         
         # Размещаем рыночный ордер
         result = self.bybit.place_order(
