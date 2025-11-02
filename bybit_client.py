@@ -57,6 +57,9 @@ class BybitClient:
                 if response["retCode"] == 0 and response["result"]["list"]:
                     klines = response["result"]["list"]
                     
+                    # Bybit возвращает данные в обратном порядке (от новых к старым)
+                    # Поэтому первый элемент - самый новый, последний - самый старый
+                    
                     # Фильтруем дубликаты
                     new_klines = []
                     for kline in klines:
@@ -73,20 +76,22 @@ class BybitClient:
                     all_klines.extend(new_klines)
                     logger.debug(f"Получено {len(new_klines)} новых свечей для {symbol}, всего: {len(all_klines)}")
                     
-                    # Получаем последнюю временную метку для следующего запроса
-                    last_timestamp = int(klines[-1][0])
+                    # Получаем самую старую временную метку (последний элемент)
+                    oldest_timestamp = int(klines[-1][0])
                     
                     # Если получили меньше лимита, значит данных больше нет
                     if len(klines) < 200:
                         logger.info(f"Загрузка данных для {symbol} завершена. Всего свечей: {len(all_klines)}")
                         break
                     
-                    # Проверяем, что timestamp действительно изменился
-                    if last_timestamp <= current_start:
-                        logger.warning(f"Timestamp не изменился ({last_timestamp}), выход из цикла")
+                    # Проверяем, что самая старая свеча старше текущего start
+                    if oldest_timestamp <= current_start:
+                        logger.info(f"Достигнут начальный timestamp ({oldest_timestamp}), загрузка завершена")
                         break
                     
-                    current_start = last_timestamp + 1
+                    # Следующий запрос - до самой старой полученной свечи
+                    # Обновляем end_time вместо current_start
+                    end_time = oldest_timestamp - 1
                     time.sleep(0.2)  # Увеличиваем задержку для избежания rate limit
                 else:
                     logger.warning(f"Пустой ответ от Bybit для {symbol}: {response.get('retMsg', 'Unknown error')}")
@@ -135,6 +140,39 @@ class BybitClient:
             df[col] = df[col].astype(float)
         
         df = df.sort_values("timestamp").reset_index(drop=True)
+        
+        # Проверяем полноту данных
+        if not df.empty:
+            # Вычисляем ожидаемое количество свечей
+            interval_minutes = int(config.KLINE_INTERVAL)
+            expected_candles = (days * 24 * 60) // interval_minutes
+            
+            actual_candles = len(df)
+            coverage_percent = (actual_candles / expected_candles) * 100
+            
+            # Проверяем временной диапазон
+            actual_start = df["timestamp"].iloc[0]
+            actual_end = df["timestamp"].iloc[-1]
+            requested_start = datetime.fromtimestamp(start_time / 1000)
+            requested_end = datetime.fromtimestamp(end_time / 1000)
+            
+            time_diff_start = (requested_start - actual_start).total_seconds() / 3600  # в часах
+            
+            if coverage_percent < 90:
+                logger.warning(
+                    f"Неполные данные для {symbol}: получено {actual_candles}/{expected_candles} свечей ({coverage_percent:.1f}%)"
+                )
+            
+            if abs(time_diff_start) > 1:  # Больше 1 часа разницы
+                logger.warning(
+                    f"Данные для {symbol} начинаются с {actual_start.strftime('%Y-%m-%d %H:%M')}, "
+                    f"запрошено с {requested_start.strftime('%Y-%m-%d %H:%M')} "
+                    f"(разница: {abs(time_diff_start):.1f} часов)"
+                )
+            
+            logger.info(
+                f"Период данных для {symbol}: {actual_start.strftime('%Y-%m-%d %H:%M')} - {actual_end.strftime('%Y-%m-%d %H:%M')}"
+            )
         
         return df
     
