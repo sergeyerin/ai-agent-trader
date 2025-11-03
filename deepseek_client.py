@@ -164,21 +164,51 @@ class DeepSeekClient:
             data_summary.append(f"Средний объем: {recent_data['volume'].mean():.2f}")
             data_summary.append(f"Изменение за период: {((recent_data['close'].iloc[-1] / recent_data['open'].iloc[0] - 1) * 100):.2f}%")
             data_summary.append("")
+            
+            # Добавляем детальные временные ряды (последние 50 свечей для детального анализа)
+            data_summary.append("Детальные данные (последние 50 свечей):")
+            data_summary.append("timestamp,open,high,low,close,volume")
+            detailed_data = recent_data.tail(50)
+            for _, row in detailed_data.iterrows():
+                data_summary.append(
+                    f"{row['timestamp']},{row['open']:.2f},{row['high']:.2f},{row['low']:.2f},{row['close']:.2f},{row['volume']:.2f}"
+                )
+            data_summary.append("")
         
-        # Золото
+        # Золото (для анализа корреляции)
         if not gold_data.empty:
             gold_recent = gold_data.tail(min(288, len(gold_data)))
-            data_summary.append(f"=== Золото XAUT/USDT (последние {len(gold_recent)} свечей) ===")
+            data_summary.append(f"=== Золото XAUT/USDT - для анализа корреляции (последние {len(gold_recent)} свечей) ===")
             data_summary.append(f"Текущая цена: {gold_recent['close'].iloc[-1]:.2f} USDT")
             data_summary.append(f"Изменение за период: {((gold_recent['close'].iloc[-1] / gold_recent['open'].iloc[0] - 1) * 100):.2f}%")
             data_summary.append("")
+            
+            # Детальные временные ряды для золота
+            data_summary.append("Детальные данные (последние 50 свечей):")
+            data_summary.append("timestamp,open,high,low,close,volume")
+            detailed_gold = gold_recent.tail(50)
+            for _, row in detailed_gold.iterrows():
+                data_summary.append(
+                    f"{row['timestamp']},{row['open']:.2f},{row['high']:.2f},{row['low']:.2f},{row['close']:.2f},{row['volume']:.2f}"
+                )
+            data_summary.append("")
         
-        # Серебро
+        # Серебро (для анализа корреляции)
         if not silver_data.empty:
             silver_recent = silver_data.tail(min(288, len(silver_data)))
-            data_summary.append(f"=== Серебро XAGUSD (последние {len(silver_recent)} свечей) ===")
+            data_summary.append(f"=== Серебро XAGUSD - для анализа корреляции (последние {len(silver_recent)} свечей) ===")
             data_summary.append(f"Текущая цена: {silver_recent['close'].iloc[-1]:.2f} USD")
             data_summary.append(f"Изменение за период: {((silver_recent['close'].iloc[-1] / silver_recent['open'].iloc[0] - 1) * 100):.2f}%")
+            data_summary.append("")
+            
+            # Детальные временные ряды для серебра
+            data_summary.append("Детальные данные (последние 50 свечей):")
+            data_summary.append("timestamp,open,high,low,close,volume")
+            detailed_silver = silver_recent.tail(50)
+            for _, row in detailed_silver.iterrows():
+                data_summary.append(
+                    f"{row['timestamp']},{row['open']:.2f},{row['high']:.2f},{row['low']:.2f},{row['close']:.2f},{row['volume']:.2f}"
+                )
             data_summary.append("")
         
         # Polymarket
@@ -227,15 +257,17 @@ class DeepSeekClient:
 - Торговая пара: {trading_pair_symbol}
 
 ЗАДАЧА:
-На основании предоставленных данных (включая корреляцию с золотом, серебром и геополитической ситуацией) 
-необходимо принять решение о покупке, продаже или бездействии с {base_currency}.
+На основании предоставленных данных необходимо принять решение о покупке, продаже или бездействии с {base_currency}.
+
+ВАЖНО: Данные по золоту и серебру предоставлены ТОЛЬКО для анализа корреляции с криптовалютной парой.
+Мы НЕ торгуем золотом или серебром - они используются как индикаторы настроений рынка драгоценных металлов,
+которые могут коррелировать с криптовалютами в периоды экономической нестабильности.
 
 Учитывай:
-1. Технический анализ (тренды, уровни поддержки/сопротивления)
-2. Корреляцию с традиционными активами (золото, серебро)
-3. Геополитические риски
-4. Объемы торгов
-5. Риск-менеджмент
+1. Технический анализ криптовалютной пары (тренды, уровни поддержки/сопротивления, объемы)
+2. Корреляцию движения цены криптовалюты с золотом/серебром (синхронность трендов, расхождения)
+3. Геополитические риски и их влияние на рынок
+4. Риск-менеджмент
 
 ФОРМАТ ОТВЕТА (строго JSON):
 {{
