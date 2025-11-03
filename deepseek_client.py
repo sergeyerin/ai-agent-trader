@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import mplfinance as mpf
 from typing import Dict, Optional, Tuple, List
 from config import config
 
@@ -62,38 +63,47 @@ class DeepSeekClient:
             return ""
         
         try:
-            # Берем последние 200 свечей для графика
-            plot_data = df.tail(min(200, len(df))).copy()
+            # Берем последние 7 дней (2016 свечей по 5 минут)
+            # 7 дней * 24 часа * 60 минут / 5 минут = 2016 свечей
+            plot_data = df.tail(min(2016, len(df))).copy()
             
-            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), 
-                                           gridspec_kw={'height_ratios': [3, 1]})
+            # Подготавливаем данные для mplfinance
+            plot_data_mpf = plot_data.set_index('timestamp')
+            plot_data_mpf = plot_data_mpf[['open', 'high', 'low', 'close', 'volume']]
+            plot_data_mpf.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
             
-            # График цены (свечной)
-            ax1.plot(plot_data['timestamp'], plot_data['close'], 
-                    label='Close', linewidth=1.5, color='#2962FF')
-            ax1.fill_between(plot_data['timestamp'], 
-                            plot_data['low'], plot_data['high'], 
-                            alpha=0.3, color='lightblue', label='High-Low Range')
+            # Настройка стиля
+            mc = mpf.make_marketcolors(
+                up='#26a69a',
+                down='#ef5350',
+                edge='inherit',
+                wick='inherit',
+                volume='in'
+            )
             
-            ax1.set_title(f'{title} - Цена', fontsize=14, fontweight='bold')
-            ax1.set_ylabel('Цена (USDT)', fontsize=11)
-            ax1.legend(loc='upper left')
-            ax1.grid(True, alpha=0.3)
-            ax1.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
-            plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45)
+            s = mpf.make_mpf_style(
+                marketcolors=mc,
+                gridstyle='-',
+                gridcolor='#e0e0e0',
+                facecolor='white',
+                figcolor='white'
+            )
             
-            # График объема
-            colors = ['green' if plot_data['close'].iloc[i] >= plot_data['open'].iloc[i] 
-                     else 'red' for i in range(len(plot_data))]
-            ax2.bar(plot_data['timestamp'], plot_data['volume'], 
-                   color=colors, alpha=0.6, width=0.0003)
-            ax2.set_ylabel('Объем', fontsize=11)
-            ax2.set_xlabel('Время', fontsize=11)
-            ax2.grid(True, alpha=0.3)
-            ax2.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
-            plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45)
-            
-            plt.tight_layout()
+            # Создаем график
+            fig, axes = mpf.plot(
+                plot_data_mpf,
+                type='candle',
+                style=s,
+                title=f'{title} (7 дней)',
+                ylabel='Цена (USDT)',
+                ylabel_lower='Объем',
+                volume=True,
+                figsize=(24, 10),  # Очень широкий график для отображения всех 2016 свечей
+                returnfig=True,
+                datetime_format='%m-%d',
+                xrotation=45,
+                warn_too_much_data=2500  # Повышаем порог предупреждения выше 2016
+            )
             
             # Создаем директорию для графиков если её нет
             charts_dir = "charts"
@@ -288,6 +298,30 @@ class DeepSeekClient:
             
             logger.info(f"Отправка запроса в {self.provider} (модель: {self.model})")
             
+            # Отладочный вывод запроса (ПОЛНЫЙ)
+            logger.debug("=" * 80)
+            logger.debug("AI REQUEST (FULL):")
+            logger.debug(f"Model: {request_params['model']}")
+            logger.debug(f"Temperature: {request_params['temperature']}")
+            logger.debug(f"Max tokens: {request_params['max_tokens']}")
+            logger.debug("-" * 80)
+            for idx, msg in enumerate(messages):
+                logger.debug(f"\nMessage {idx + 1} - Role: {msg['role']}")
+                if isinstance(msg.get('content'), str):
+                    # Выводим ПОЛНЫЙ контент (включая все временные ряды)
+                    logger.debug(f"Content (length: {len(msg['content'])} chars):\n{msg['content']}")
+                elif isinstance(msg.get('content'), list):
+                    logger.debug(f"Content: [multipart message with {len(msg['content'])} parts]")
+                    for part_idx, part in enumerate(msg['content']):
+                        if part.get('type') == 'text':
+                            # Выводим ПОЛНЫЙ текст
+                            logger.debug(f"  Part {part_idx + 1} - Text (length: {len(part['text'])} chars):\n{part['text']}")
+                        elif part.get('type') == 'image_url':
+                            # Для изображений выводим только инфо, не base64
+                            img_url = part['image_url']['url']
+                            logger.debug(f"  Part {part_idx + 1} - Image: base64 data, length: {len(img_url)} chars")
+            logger.debug("=" * 80)
+            
             # Для OpenRouter передаем extra_headers отдельно
             if self.extra_headers:
                 response = self.client.chat.completions.create(
@@ -298,6 +332,12 @@ class DeepSeekClient:
                 response = self.client.chat.completions.create(**request_params)
             
             response_text = response.choices[0].message.content.strip()
+            
+            # Отладочный вывод ответа
+            logger.debug("=" * 80)
+            logger.debug("AI RESPONSE:")
+            logger.debug(f"Response text:\n{response_text}")
+            logger.debug("=" * 80)
             
             # Попытка извлечь JSON из ответа
             if "```json" in response_text:

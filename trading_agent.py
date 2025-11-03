@@ -1,17 +1,41 @@
 from datetime import datetime
 from typing import Optional, Dict
 import logging
+import pandas as pd
 
 from bybit_client import BybitClient
 from polymarket_client import PolymarketClient
 from deepseek_client import DeepSeekClient
+from goldpricez_client import GoldPricezClient
 from config import config
 
 
+# Устанавливаем уровень логирования из config
+log_level = getattr(logging, config.LOG_LEVEL, logging.INFO)
+
+# Настройка логирования с несколькими обработчиками
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=log_level,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # Вывод в консоль
+        logging.FileHandler('trading_agent.log', encoding='utf-8')  # Основной лог-файл
+    ]
 )
+
+# Добавляем отдельный файл для DEBUG логов
+if log_level == logging.DEBUG:
+    debug_handler = logging.FileHandler('debug.log', encoding='utf-8')
+    debug_handler.setLevel(logging.DEBUG)
+    debug_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logging.getLogger().addHandler(debug_handler)
+    logging.info("DEBUG логи будут записываться в debug.log")
+
+# Отключаем DEBUG логи для шумных библиотек
+logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
+logging.getLogger('matplotlib').setLevel(logging.INFO)
+logging.getLogger('PIL').setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,6 +44,7 @@ class TradingAgent:
         self.bybit = BybitClient()
         self.polymarket = PolymarketClient()
         self.deepseek = DeepSeekClient()
+        self.goldpricez = GoldPricezClient()
         self.trading_pairs = config.TRADING_PAIRS
         self.max_trading_volume = config.MAX_TRADING_VOLUME
         self.max_trade_amount = config.MAX_TRADE_AMOUNT
@@ -64,17 +89,20 @@ class TradingAgent:
                 logger.error("Не удалось получить данные ни для одного инструмента")
                 return None
             
-            logger.info("Получение данных золота XAUT/USDT...")
-            gold_data = self.bybit.get_historical_data(
-                config.GOLD_SYMBOL,
-                config.HISTORICAL_DAYS
-            )
+            # Золото - используем уже полученные данные если есть
+            if config.GOLD_SYMBOL in trading_pairs_data:
+                logger.info(f"Используются уже полученные данные для {config.GOLD_SYMBOL}")
+                gold_data = trading_pairs_data[config.GOLD_SYMBOL]["data"]
+            else:
+                logger.info("Получение данных золота XAUT/USDT...")
+                gold_data = self.bybit.get_historical_data(
+                    config.GOLD_SYMBOL,
+                    config.HISTORICAL_DAYS
+                )
             
-            logger.info("Получение данных серебра XAGUSD...")
-            silver_data = self.bybit.get_historical_data(
-                config.SILVER_SYMBOL,
-                config.HISTORICAL_DAYS
-            )
+            # Серебро - получаем с goldpricez.com
+            logger.info("Получение данных по серебру (XAG) с goldpricez.com...")
+            silver_data = self.goldpricez.get_silver_historical_data(config.HISTORICAL_DAYS)
             
             # Получаем данные Polymarket
             logger.info("Получение данных Polymarket...")
@@ -91,25 +119,16 @@ class TradingAgent:
             logger.error(f"Ошибка при сборе рыночных данных: {e}")
             return None
     
-    def get_trading_decisions(self, market_data: Dict) -> Dict[str, Optional[Dict]]:
+    def create_charts(self, market_data: Dict) -> Dict[str, str]:
         """
-        Получение торговых решений от DeepSeek для всех инструментов.
+        Создание графиков для всех инструментов.
         
         Args:
             market_data: Собранные рыночные данные
         
         Returns:
-            Словарь с рекомендациями для каждого инструмента
+            Словарь с base64-кодированными графиками
         """
-        if not config.ENABLE_AI_ANALYSIS:
-            logger.warning("Анализ AI отключен. Возвращаем пустые рекомендации.")
-            # Возвращаем mock-рекомендации "hold" для всех пар
-            return {pair: {"action": "hold", "reasoning": "AI analysis disabled"} 
-                    for pair in market_data["trading_pairs_data"].keys()}
-        
-        logger.info("Подготовка данных для DeepSeek...")
-        
-        # Создаем графики для всех доступных инструментов (исключая SOL)
         logger.info("Создание графиков для анализа...")
         chart_images = {}
         
@@ -132,6 +151,29 @@ class TradingAgent:
                         logger.error(f"Ошибка при создании графика для {symbol}: {e}")
         
         logger.info(f"Создано {len(chart_images)} графиков")
+        return chart_images
+    
+    def get_trading_decisions(self, market_data: Dict, chart_images: Optional[Dict[str, str]] = None) -> Dict[str, Optional[Dict]]:
+        """
+        Получение торговых решений от DeepSeek для всех инструментов.
+        
+        Args:
+            market_data: Собранные рыночные данные
+            chart_images: Словарь с графиками (optional)
+        
+        Returns:
+            Словарь с рекомендациями для каждого инструмента
+        """
+        if not config.ENABLE_AI_ANALYSIS:
+            logger.warning("Анализ AI отключен. Возвращаем пустые рекомендации.")
+            # Возвращаем mock-рекомендации "hold" для всех пар
+            return {pair: {"action": "hold", "reasoning": "AI analysis disabled"} 
+                    for pair in market_data["trading_pairs_data"].keys()}
+        
+        logger.info("Подготовка данных для DeepSeek...")
+        
+        if chart_images is None:
+            chart_images = {}
         
         recommendations = {}
         
@@ -265,13 +307,16 @@ class TradingAgent:
             logger.error("Не удалось собрать рыночные данные. Пропускаем итерацию.")
             return
         
-        # 2. Получаем торговые решения для всех инструментов
-        recommendations = self.get_trading_decisions(market_data)
+        # 2. Создаём графики (независимо от AI)
+        chart_images = self.create_charts(market_data)
+        
+        # 3. Получаем торговые решения для всех инструментов
+        recommendations = self.get_trading_decisions(market_data, chart_images)
         if not recommendations:
             logger.error("Не удалось получить торговые рекомендации. Пропускаем итерацию.")
             return
         
-        # 3. Выполняем торговые операции для каждого инструмента
+        # 4. Выполняем торговые операции для каждого инструмента
         results = {}
         for symbol, recommendation in recommendations.items():
             if recommendation is None:

@@ -28,7 +28,7 @@ class Config:
     # Список торговых инструментов для анализа и торговли
     TRADING_PAIRS = os.getenv(
         "TRADING_PAIRS", 
-        "SOLUSDT,BTCUSDT,ETHUSDT,TWTUSDT,MNTUSDT,XAUUSDT"
+        "SOLUSDT,BTCUSDT,ETHUSDT,TWTUSDT,MNTUSDT,XAUTUSDT"
     ).split(",")
     MAX_TRADE_AMOUNT = float(os.getenv("MAX_TRADE_AMOUNT", "10"))
     INTERVAL_MINUTES = int(os.getenv("INTERVAL_MINUTES", "5"))
@@ -36,14 +36,15 @@ class Config:
     # Debug/Testing flags
     ENABLE_AI_ANALYSIS = os.getenv("ENABLE_AI_ANALYSIS", "true").lower() == "true"
     ENABLE_TRADING = os.getenv("ENABLE_TRADING", "true").lower() == "true"
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()  # DEBUG, INFO, WARNING, ERROR
     
     # Data collection parameters
     HISTORICAL_DAYS = 7  # Изменено с месяцев на дни для быстрой работы
     KLINE_INTERVAL = "5"  # 5 minutes
     
     # Market data symbols (для анализа корреляций)
-    GOLD_SYMBOL = "XAUTUSDT"
-    SILVER_SYMBOL = "XAGUSDT"
+    GOLD_SYMBOL = "XAUTUSDT"  # Золото с Bybit
+    SILVER_SYMBOL = "XAG"  # Серебро с goldpricez.com (не используется для Bybit)
     
     # Polymarket
     POLYMARKET_URL = "https://polymarket.com/event/russia-x-ukraine-ceasefire-in-2025?tid=1761927992822"

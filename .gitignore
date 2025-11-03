@@ -40,9 +40,13 @@ env/
 # Logs
 *.log
 trading_agent.log
+debug.log
 
 # Charts
 charts/
+
+# Data (CSV files)
+data/
 
 # Jupyter Notebook
 .ipynb_checkpoints

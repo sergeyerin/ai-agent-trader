@@ -153,8 +153,9 @@ class BybitClient:
             # Проверяем временной диапазон
             actual_start = df["timestamp"].iloc[0]
             actual_end = df["timestamp"].iloc[-1]
-            requested_start = datetime.fromtimestamp(start_time / 1000)
-            requested_end = datetime.fromtimestamp(end_time / 1000)
+            # Используем utcfromtimestamp для согласованности с UTC timestamp'ами от Bybit
+            requested_start = datetime.utcfromtimestamp(start_time / 1000)
+            requested_end = datetime.utcfromtimestamp(end_time / 1000)
             
             time_diff_start = (requested_start - actual_start).total_seconds() / 3600  # в часах
             
@@ -173,8 +174,39 @@ class BybitClient:
             logger.info(
                 f"Период данных для {symbol}: {actual_start.strftime('%Y-%m-%d %H:%M')} - {actual_end.strftime('%Y-%m-%d %H:%M')}"
             )
+            
+            # Сохраняем данные в CSV
+            self._save_to_csv(df, symbol)
         
         return df
+    
+    def _save_to_csv(self, df: pd.DataFrame, symbol: str) -> None:
+        """
+        Сохранение данных в CSV файл.
+        
+        Args:
+            df: DataFrame с данными
+            symbol: Символ инструмента
+        """
+        try:
+            import os
+            from datetime import datetime as dt
+            
+            # Создаем директорию для CSV файлов
+            csv_dir = "data"
+            if not os.path.exists(csv_dir):
+                os.makedirs(csv_dir)
+            
+            # Генерируем имя файла с временной меткой
+            timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
+            csv_filename = f"{csv_dir}/{symbol}_{timestamp}.csv"
+            
+            # Сохраняем в CSV
+            df.to_csv(csv_filename, index=False)
+            logger.info(f"Timeseries сохранены в {csv_filename}")
+            
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении CSV для {symbol}: {e}")
     
     def get_account_balance(self) -> Dict:
         """

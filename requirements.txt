@@ -7,3 +7,5 @@ python-dotenv==1.0.1
 schedule==1.2.1
 pandas==2.2.1
 beautifulsoup4==4.12.3
+mplfinance==0.12.10b0
+matplotlib>=3.7.2
