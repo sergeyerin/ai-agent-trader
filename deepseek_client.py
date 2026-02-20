@@ -137,7 +137,10 @@ class DeepSeekClient:
         trading_pair_symbol: str,
         gold_data: pd.DataFrame,
         silver_data: pd.DataFrame,
-        polymarket_info: str
+        polymarket_info: str,
+        indicators_text: str = "",
+        portfolio_text: str = "",
+        history_text: str = "",
     ) -> str:
         """
         Подготовка данных рынка для отправки в DeepSeek.
@@ -148,15 +151,33 @@ class DeepSeekClient:
             gold_data: Данные по золоту
             silver_data: Данные по серебру
             polymarket_info: Информация с Polymarket
+            indicators_text: Технические индикаторы (форматированный текст)
+            portfolio_text: Состояние портфеля (форматированный текст)
+            history_text: История сделок (форматированный текст)
         
         Returns:
             Форматированная строка с данными
         """
         data_summary = []
         
+        # Портфель (первым — чтобы AI знал контекст)
+        if portfolio_text:
+            data_summary.append(portfolio_text)
+            data_summary.append("")
+        
+        # История сделок
+        if history_text:
+            data_summary.append(history_text)
+            data_summary.append("")
+        
+        # Технические индикаторы
+        if indicators_text:
+            data_summary.append(indicators_text)
+            data_summary.append("")
+        
         # Торгуемая пара
         if not trading_pair_data.empty:
-            recent_data = trading_pair_data.tail(min(288, len(trading_pair_data)))  # Последние 288 свечей (24 часа) или все доступные
+            recent_data = trading_pair_data.tail(min(288, len(trading_pair_data)))
             data_summary.append(f"=== {trading_pair_symbol} (последние {len(recent_data)} свечей) ===")
             data_summary.append(f"Текущая цена: {recent_data['close'].iloc[-1]:.2f} USDT")
             data_summary.append(f"Минимум за период: {recent_data['low'].min():.2f} USDT")
@@ -165,7 +186,6 @@ class DeepSeekClient:
             data_summary.append(f"Изменение за период: {((recent_data['close'].iloc[-1] / recent_data['open'].iloc[0] - 1) * 100):.2f}%")
             data_summary.append("")
             
-            # Добавляем детальные временные ряды (последние 50 свечей для детального анализа)
             data_summary.append("Детальные данные (последние 50 свечей):")
             data_summary.append("timestamp,open,high,low,close,volume")
             detailed_data = recent_data.tail(50)
@@ -183,7 +203,6 @@ class DeepSeekClient:
             data_summary.append(f"Изменение за период: {((gold_recent['close'].iloc[-1] / gold_recent['open'].iloc[0] - 1) * 100):.2f}%")
             data_summary.append("")
             
-            # Детальные временные ряды для золота
             data_summary.append("Детальные данные (последние 50 свечей):")
             data_summary.append("timestamp,open,high,low,close,volume")
             detailed_gold = gold_recent.tail(50)
@@ -201,7 +220,6 @@ class DeepSeekClient:
             data_summary.append(f"Изменение за период: {((silver_recent['close'].iloc[-1] / silver_recent['open'].iloc[0] - 1) * 100):.2f}%")
             data_summary.append("")
             
-            # Детальные временные ряды для серебра
             data_summary.append("Детальные данные (последние 50 свечей):")
             data_summary.append("timestamp,open,high,low,close,volume")
             detailed_silver = silver_recent.tail(50)
@@ -245,47 +263,38 @@ class DeepSeekClient:
         if chart_images and trading_pair_symbol in chart_images:
             chart_note = "\n\nВНИМАНИЕ: К этому запросу прикреплен график с историческими данными цены и объема. Используй визуальный анализ графика для выявления трендов, уровней поддержки/сопротивления и паттернов."
         
-        prompt = f"""Ты успешный трейдер криптовалют с многолетним опытом анализа рынков.
+        prompt = f"""Ты профессиональный количественный трейдер. Принимай решения на основе технических индикаторов и данных, а не интуиции.
 
-У тебя есть следующие исторические данные для анализа:
-
+ДАННЫЕ ДЛЯ АНАЛИЗА:
 {market_data}{chart_note}
 
 ТЕКУЩИЕ ПАРАМЕТРЫ:
 - Текущая цена {base_currency}: {current_price:.2f} USDT
 - Максимальная сумма сделки: {max_trade_amount} USDT
 - Торговая пара: {trading_pair_symbol}
+- Комиссия Bybit: 0.1% за сделку (учитывай при расчёте целесообразности)
 
-ЗАДАЧА:
-На основании предоставленных данных необходимо принять решение о покупке, продаже или бездействии с {base_currency}.
-
-ВАЖНО: Данные по золоту и серебру предоставлены ТОЛЬКО для анализа корреляции с криптовалютной парой.
-Мы НЕ торгуем золотом или серебром - они используются как индикаторы настроений рынка драгоценных металлов,
-которые могут коррелировать с криптовалютами в периоды экономической нестабильности.
-
-Учитывай:
-1. Технический анализ криптовалютной пары (тренды, уровни поддержки/сопротивления, объемы)
-2. Корреляцию движения цены криптовалюты с золотом/серебром (синхронность трендов, расхождения)
-3. Геополитические риски и их влияние на рынок
-4. Риск-менеджмент
+ПРАВИЛА ПРИНЯТИЯ РЕШЕНИЙ:
+1. Используй предоставленные технические индикаторы (RSI, EMA, MACD, Bollinger Bands, ATR) как основу решения.
+2. НЕ покупай при RSI > 70 (перекуплен). НЕ продавай при RSI < 30 (перепродан).
+3. Торгуй по тренду: покупай когда EMA20 > EMA50 > EMA200, продавай при обратном.
+4. Учитывай ширину Bollinger Bands — узкие полосы = скорый сильный ход.
+5. Если нет чёткого сигнала — выбирай hold. Лучше пропустить сделку, чем потерять на комиссиях.
+6. Учитывай текущий портфель: не покупай то, чего и так много. Продавай с прибылью.
+7. Анализируй свои прошлые сделки: если последние сделки убыточные, будь осторожнее.
+8. Данные по золоту/серебру — ТОЛЬКО для анализа корреляции, мы ими НЕ торгуем.
 
 ФОРМАТ ОТВЕТА (строго JSON):
 {{
     "action": "buy" | "sell" | "hold",
     "price_from": число или null,
     "price_to": число или null,
-    "quantity_usdt": число (сумма в USDT) или null,
-    "reasoning": "краткое объяснение решения"
+    "quantity_usdt": число (сумма в USDT, не более {max_trade_amount}) или null,
+    "confidence": число от 0 до 100,
+    "reasoning": "краткое объяснение с указанием конкретных индикаторов"
 }}
 
-Где:
-- action: "buy" (покупать), "sell" (продавать), "hold" (не проводить сделку)
-- price_from: нижняя граница цены для сделки (null если hold)
-- price_to: верхняя граница цены для сделки (null если hold)
-- quantity_usdt: рекомендуемая сумма сделки в USDT (не более {max_trade_amount}, null если hold)
-- reasoning: краткое обоснование решения
-
-ВАЖНО: Ответь ТОЛЬКО JSON, без дополнительного текста."""
+ВАЖНО: Ответь ТОЛЬКО JSON, без дополнительного текста. Поле confidence — твоя уверенность в рекомендации от 0 до 100."""
 
         try:
             # Подготовка сообщений
@@ -324,7 +333,7 @@ class DeepSeekClient:
             request_params = {
                 "model": self.model,
                 "messages": messages,
-                "temperature": 0.7,
+                "temperature": 0.2,
                 "max_tokens": 500
             }
             

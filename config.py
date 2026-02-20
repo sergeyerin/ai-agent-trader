@@ -33,6 +33,14 @@ class Config:
     MAX_TRADE_AMOUNT = float(os.getenv("MAX_TRADE_AMOUNT", "10"))
     INTERVAL_MINUTES = int(os.getenv("INTERVAL_MINUTES", "5"))
     
+    # Risk management
+    STOP_LOSS_PCT = float(os.getenv("STOP_LOSS_PCT", "5.0"))  # Макс. убыток на позицию %
+    TAKE_PROFIT_PCT = float(os.getenv("TAKE_PROFIT_PCT", "3.0"))  # Цель прибыли %
+    MAX_DAILY_LOSS = float(os.getenv("MAX_DAILY_LOSS", "20.0"))  # Макс. дневной убыток USDT
+    
+    # Trade history
+    TRADES_DB_PATH = os.getenv("TRADES_DB_PATH", "trades.db")
+    
     # Debug/Testing flags
     ENABLE_AI_ANALYSIS = os.getenv("ENABLE_AI_ANALYSIS", "true").lower() == "true"
     ENABLE_TRADING = os.getenv("ENABLE_TRADING", "true").lower() == "true"

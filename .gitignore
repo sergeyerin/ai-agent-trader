@@ -48,6 +48,9 @@ charts/
 # Data (CSV files)
 data/
 
+# Trade history database
+trades.db
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
