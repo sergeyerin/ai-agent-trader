@@ -28,15 +28,17 @@ class Config:
     # Список торговых инструментов для анализа и торговли
     TRADING_PAIRS = os.getenv(
         "TRADING_PAIRS", 
-        "SOLUSDT,BTCUSDT,ETHUSDT,TWTUSDT,MNTUSDT,XAUTUSDT"
+        "BTCUSDT,ETHUSDT,SOLUSDT,XAUTUSDT"
     ).split(",")
     MAX_TRADE_AMOUNT = float(os.getenv("MAX_TRADE_AMOUNT", "10"))
-    INTERVAL_MINUTES = int(os.getenv("INTERVAL_MINUTES", "5"))
+    INTERVAL_MINUTES = int(os.getenv("INTERVAL_MINUTES", "15"))
     
     # Risk management
     STOP_LOSS_PCT = float(os.getenv("STOP_LOSS_PCT", "5.0"))  # Макс. убыток на позицию %
     TAKE_PROFIT_PCT = float(os.getenv("TAKE_PROFIT_PCT", "3.0"))  # Цель прибыли %
     MAX_DAILY_LOSS = float(os.getenv("MAX_DAILY_LOSS", "20.0"))  # Макс. дневной убыток USDT
+    MIN_CONFIDENCE = int(os.getenv("MIN_CONFIDENCE", "60"))  # Мин. уверенность AI для сделки (0-100)
+    POSITION_SIZE_PCT = float(os.getenv("POSITION_SIZE_PCT", "5.0"))  # Размер позиции % от портфеля
     
     # Trade history
     TRADES_DB_PATH = os.getenv("TRADES_DB_PATH", "trades.db")
@@ -52,10 +54,16 @@ class Config:
     
     # Market data symbols (для анализа корреляций)
     GOLD_SYMBOL = "XAUTUSDT"  # Золото с Bybit
-    SILVER_SYMBOL = "XAG"  # Серебро с goldpricez.com (не используется для Bybit)
+    
+    # Limit order settings
+    USE_LIMIT_ORDERS = os.getenv("USE_LIMIT_ORDERS", "true").lower() == "true"
+    LIMIT_ORDER_OFFSET_PCT = float(os.getenv("LIMIT_ORDER_OFFSET_PCT", "0.05"))  # Offset от рыночной цены %
     
     # Polymarket
-    POLYMARKET_URL = "https://polymarket.com/event/russia-x-ukraine-ceasefire-in-2025?tid=1761927992822"
+    POLYMARKET_CONDITION_ID = os.getenv(
+        "POLYMARKET_CONDITION_ID",
+        "0x7a61644000000000000000000000000000000000000000000000000000000000"  # Placeholder — нужно обновить на актуальный
+    )
 
 
 config = Config()

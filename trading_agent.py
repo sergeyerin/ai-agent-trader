@@ -6,9 +6,10 @@ import pandas as pd
 from bybit_client import BybitClient
 from polymarket_client import PolymarketClient
 from deepseek_client import DeepSeekClient
-from goldpricez_client import GoldPricezClient
 from portfolio_manager import PortfolioManager
 from trade_history import TradeHistory
+from risk_manager import RiskManager
+from monitoring import PerformanceMonitor
 from indicators import compute_all_indicators, format_indicators_for_prompt
 from config import config
 
@@ -47,9 +48,10 @@ class TradingAgent:
         self.bybit = BybitClient()
         self.polymarket = PolymarketClient()
         self.deepseek = DeepSeekClient()
-        self.goldpricez = GoldPricezClient()
         self.portfolio = PortfolioManager(self.bybit)
         self.history = TradeHistory()
+        self.risk_manager = RiskManager(self.history, self.portfolio)
+        self.monitor = PerformanceMonitor(self.history)
         self.trading_pairs = config.TRADING_PAIRS
         self.max_trading_volume = config.MAX_TRADING_VOLUME
         self.max_trade_amount = config.MAX_TRADE_AMOUNT
@@ -105,10 +107,6 @@ class TradingAgent:
                     config.HISTORICAL_DAYS
                 )
             
-            # Серебро - получаем с goldpricez.com
-            logger.info("Получение данных по серебру (XAG) с goldpricez.com...")
-            silver_data = self.goldpricez.get_silver_historical_data(config.HISTORICAL_DAYS)
-            
             # Получаем данные Polymarket
             logger.info("Получение данных Polymarket...")
             polymarket_info = self.polymarket.get_formatted_data()
@@ -116,7 +114,6 @@ class TradingAgent:
             return {
                 "trading_pairs_data": trading_pairs_data,
                 "gold_data": gold_data,
-                "silver_data": silver_data,
                 "polymarket_info": polymarket_info
             }
             
@@ -214,8 +211,7 @@ class TradingAgent:
                 pair_info["data"],
                 pair,
                 market_data["gold_data"],
-                market_data["silver_data"],
-                market_data["polymarket_info"],
+                polymarket_info=market_data["polymarket_info"],
                 indicators_text=indicators_texts.get(pair, ""),
                 portfolio_text=portfolio_text,
                 history_text=history_text,
@@ -346,13 +342,22 @@ class TradingAgent:
             )
             return True
         
-        # Размещаем рыночный ордер
-        result = self.bybit.place_order(
-            symbol=symbol,
-            side=side,
-            qty=qty_crypto,
-            order_type="Market"
-        )
+        # Размещаем ордер (лимитный или рыночный)
+        if config.USE_LIMIT_ORDERS:
+            result = self.bybit.place_limit_order(
+                symbol=symbol,
+                side=side,
+                qty=qty_crypto,
+                current_price=current_price,
+                offset_pct=config.LIMIT_ORDER_OFFSET_PCT,
+            )
+        else:
+            result = self.bybit.place_order(
+                symbol=symbol,
+                side=side,
+                qty=qty_crypto,
+                order_type="Market"
+            )
         
         success = result.get("retCode") == 0
         self.history.record_trade(
@@ -385,13 +390,11 @@ class TradingAgent:
         # 2. Получаем историю сделок
         history_text = self.history.format_history_for_prompt()
         
-        # 3. Проверяем дневной лимит убытков
-        daily_pnl = self.history.get_daily_pnl()
-        if daily_pnl < -config.MAX_DAILY_LOSS:
-            logger.warning(
-                f"Дневной убыток {daily_pnl:.2f} USDT превышает лимит "
-                f"{config.MAX_DAILY_LOSS} USDT. Пропускаем итерацию."
-            )
+        # 3. Проверяем дневной лимит убытков через risk_manager
+        allowed, reason = self.risk_manager.is_trading_allowed()
+        if not allowed:
+            logger.warning(f"Торговля приостановлена: {reason}")
+            self.monitor.print_summary()
             return
         
         # 4. Собираем рыночные данные
@@ -400,13 +403,30 @@ class TradingAgent:
             logger.error("Не удалось собрать рыночные данные. Пропускаем итерацию.")
             return
         
-        # 5. Вычисляем технические индикаторы
+        # 5. Проверяем SL/TP для открытых позиций
+        current_prices = {
+            sym: info["current_price"]
+            for sym, info in market_data["trading_pairs_data"].items()
+        }
+        sl_tp_actions = self.risk_manager.check_positions(current_prices)
+        for action in sl_tp_actions:
+            sym = action["symbol"]
+            logger.warning(f"{'STOP-LOSS' if action['reason'] == 'stop_loss' else 'TAKE-PROFIT'} сработал для {sym}")
+            sell_rec = {
+                "action": "sell",
+                "quantity_usdt": action.get("quantity_usdt", self.max_trade_amount),
+                "reasoning": f"{action['reason']}: entry {action['entry_price']:.2f} → current {action['current_price']:.2f}",
+                "confidence": 100,
+            }
+            self.execute_trade(sym, sell_rec, action["current_price"])
+        
+        # 6. Вычисляем технические индикаторы
         indicators_texts = self.compute_indicators(market_data)
         
-        # 6. Создаём графики
+        # 7. Создаём графики
         chart_images = self.create_charts(market_data)
         
-        # 7. Получаем торговые решения с учётом индикаторов, портфеля и истории
+        # 8. Получаем торговые решения с учётом индикаторов, портфеля и истории
         recommendations = self.get_trading_decisions(
             market_data, chart_images,
             indicators_texts=indicators_texts,
@@ -417,13 +437,20 @@ class TradingAgent:
             logger.error("Не удалось получить торговые рекомендации. Пропускаем итерацию.")
             return
         
-        # 8. Выполняем торговые операции
+        # 9. Выполняем торговые операции (с фильтром confidence)
         results = {}
         for symbol, recommendation in recommendations.items():
             if recommendation is None:
                 logger.warning(f"Пропускаем {symbol} - нет рекомендации")
                 results[symbol] = False
                 continue
+            
+            # Фильтр по уверенности AI
+            if not self.risk_manager.filter_by_confidence(recommendation):
+                recommendation = {
+                    "action": "hold",
+                    "reasoning": f"Confidence ниже порога ({recommendation.get('confidence', 0)}% < {config.MIN_CONFIDENCE}%)",
+                }
             
             logger.info(f"\n{'='*40}")
             logger.info(f"Обработка {symbol}")
@@ -433,11 +460,12 @@ class TradingAgent:
             success = self.execute_trade(symbol, recommendation, current_price)
             results[symbol] = success
         
-        # 9. Итоговая статистика
+        # 10. Итоговая статистика и мониторинг
         successful = sum(1 for s in results.values() if s)
         total = len(results)
         logger.info(f"\n{'='*60}")
         logger.info(f"Итерация завершена: {successful}/{total} успешных операций")
         logger.info(f"Баланс USDT: {self.portfolio.usdt_balance:.2f}")
-        logger.info(f"Дневной P&L: {daily_pnl:+.2f} USDT")
         logger.info("=" * 60)
+        
+        self.monitor.print_summary()

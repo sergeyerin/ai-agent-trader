@@ -136,8 +136,8 @@ class DeepSeekClient:
         trading_pair_data: pd.DataFrame,
         trading_pair_symbol: str,
         gold_data: pd.DataFrame,
-        silver_data: pd.DataFrame,
-        polymarket_info: str,
+        silver_data: pd.DataFrame = None,
+        polymarket_info: str = "",
         indicators_text: str = "",
         portfolio_text: str = "",
         history_text: str = "",
@@ -213,7 +213,7 @@ class DeepSeekClient:
             data_summary.append("")
         
         # Серебро (для анализа корреляции)
-        if not silver_data.empty:
+        if silver_data is not None and not silver_data.empty:
             silver_recent = silver_data.tail(min(288, len(silver_data)))
             data_summary.append(f"=== Серебро XAGUSD - для анализа корреляции (последние {len(silver_recent)} свечей) ===")
             data_summary.append(f"Текущая цена: {silver_recent['close'].iloc[-1]:.2f} USD")
@@ -298,8 +298,16 @@ class DeepSeekClient:
 
         try:
             # Подготовка сообщений
+            system_prompt = (
+                "Ты количественный трейдер. Отвечай только в формате JSON.\n\n"
+                "СТРАТЕГИЯ:\n"
+                "1. Momentum: покупай при восходящем тренде (EMA20>EMA50>EMA200) и растущем MACD.\n"
+                "2. Mean Reversion: покупай при отскоке от нижней Bollinger Band + RSI<30.\n"
+                "3. НЕ торгуй если ожидаемый профит < 0.3% (комиссия round-trip = 0.2%).\n"
+                "4. В сомнениях — всегда hold."
+            )
             messages = [
-                {"role": "system", "content": "Ты профессиональный трейдер криптовалют. Отвечай только в формате JSON."}
+                {"role": "system", "content": system_prompt}
             ]
             
             # Если есть графики, добавляем их в запрос

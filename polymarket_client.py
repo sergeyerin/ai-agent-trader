@@ -1,80 +1,90 @@
 import requests
-from bs4 import BeautifulSoup
-from typing import Optional, Dict
-from config import config
+import json
+import logging
+from typing import Optional, Dict, List
+
+logger = logging.getLogger(__name__)
+
+# Polymarket Gamma API (публичный, без ключа)
+GAMMA_API_BASE = "https://gamma-api.polymarket.com"
 
 
 class PolymarketClient:
     def __init__(self):
-        self.url = config.POLYMARKET_URL
-    
-    def get_ceasefire_probability(self) -> Optional[Dict]:
+        self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": "AI-Trading-Agent/1.0",
+            "Accept": "application/json",
+        })
+
+    def search_events(self, query: str, limit: int = 5) -> List[Dict]:
         """
-        Получение вероятности прекращения огня между Россией и Украиной.
-        
-        Returns:
-            Словарь с данными о голосовании или None
+        Поиск событий на Polymarket через Gamma API.
+
+        Args:
+            query: Поисковый запрос
+            limit: Максимум результатов
         """
         try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-            }
-            response = requests.get(self.url, headers=headers, timeout=10)
+            response = self.session.get(
+                f"{GAMMA_API_BASE}/events",
+                params={"title": query, "limit": limit, "active": True},
+                timeout=10,
+            )
             response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, "html.parser")
-            
-            # Ищем процент вероятности на странице
-            # Polymarket обычно отображает процент в определенных элементах
-            probability_text = None
-            
-            # Попытка найти процент в различных элементах
-            for elem in soup.find_all(text=True):
-                text = elem.strip()
-                if "%" in text and text.replace("%", "").replace(" ", "").isdigit():
-                    try:
-                        prob = float(text.replace("%", "").strip())
-                        if 0 <= prob <= 100:
-                            probability_text = prob
-                            break
-                    except ValueError:
-                        continue
-            
-            if probability_text is not None:
-                return {
-                    "event": "Russia x Ukraine ceasefire in 2025",
-                    "probability": probability_text,
-                    "source": "Polymarket"
-                }
-            else:
-                # Если не нашли процент, возвращаем базовые данные
-                return {
-                    "event": "Russia x Ukraine ceasefire in 2025",
-                    "probability": None,
-                    "source": "Polymarket",
-                    "note": "Unable to parse probability from page"
-                }
-                
+            return response.json()
         except Exception as e:
-            print(f"Ошибка при получении данных с Polymarket: {e}")
-            return None
-    
+            logger.error(f"Ошибка поиска событий Polymarket: {e}")
+            return []
+
+    def get_geopolitical_data(self) -> Optional[Dict]:
+        """
+        Получает геополитические данные, релевантные для крипто-торговли.
+        """
+        keywords = ["ceasefire", "russia ukraine", "war"]
+
+        for keyword in keywords:
+            events = self.search_events(keyword, limit=3)
+            if not events:
+                continue
+
+            results = []
+            for event in events:
+                title = event.get("title", "Unknown")
+                markets = event.get("markets", [])
+                for market in markets:
+                    outcome = market.get("outcomePrices")
+                    question = market.get("question", title)
+                    if outcome:
+                        try:
+                            prices = json.loads(outcome) if isinstance(outcome, str) else outcome
+                            yes_price = float(prices[0]) if prices else None
+                            if yes_price is not None:
+                                results.append({
+                                    "question": question,
+                                    "probability_yes": yes_price * 100,
+                                })
+                        except (json.JSONDecodeError, IndexError, TypeError, ValueError):
+                            continue
+
+            if results:
+                return {"source": "Polymarket Gamma API", "events": results}
+
+        return None
+
     def get_formatted_data(self) -> str:
         """
-        Получение отформатированных данных для использования в промпте.
-        
-        Returns:
-            Строка с данными о голосовании
+        Получение отформатированных данных для промпта AI.
         """
-        data = self.get_ceasefire_probability()
-        
-        if not data:
+        data = self.get_geopolitical_data()
+
+        if not data or not data.get("events"):
             return "Данные Polymarket недоступны"
-        
-        if data.get("probability") is not None:
-            return (
-                f"Polymarket - {data['event']}: "
-                f"вероятность {data['probability']}%"
-            )
-        else:
-            return f"Polymarket - {data['event']}: данные недоступны"
+
+        lines = [f"Источник: {data['source']}"]
+        for event in data["events"][:5]:
+            prob = event["probability_yes"]
+            question = event["question"]
+            lines.append(f"  - {question}: вероятность {prob:.1f}%")
+
+        return "\n".join(lines)

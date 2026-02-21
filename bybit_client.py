@@ -261,6 +261,78 @@ class BybitClient:
             print(f"Ошибка при размещении ордера: {e}")
             return {"retCode": -1, "retMsg": str(e)}
     
+    def get_orderbook(self, symbol: str, limit: int = 5) -> Optional[Dict]:
+        """
+        Получение стакана ордеров.
+        
+        Args:
+            symbol: Торговая пара
+            limit: Глубина стакана
+        
+        Returns:
+            {"best_bid": float, "best_ask": float, "spread_pct": float} или None
+        """
+        try:
+            response = self.client.get_orderbook(category="spot", symbol=symbol, limit=limit)
+            if response["retCode"] == 0:
+                bids = response["result"]["b"]  # [[price, qty], ...]
+                asks = response["result"]["a"]
+                if bids and asks:
+                    best_bid = float(bids[0][0])
+                    best_ask = float(asks[0][0])
+                    spread_pct = (best_ask - best_bid) / best_bid * 100
+                    return {
+                        "best_bid": best_bid,
+                        "best_ask": best_ask,
+                        "spread_pct": spread_pct,
+                    }
+        except Exception as e:
+            logger.error(f"Ошибка получения orderbook для {symbol}: {e}")
+        return None
+    
+    def place_limit_order(
+        self,
+        symbol: str,
+        side: str,
+        qty: float,
+        current_price: float,
+        offset_pct: float = 0.05,
+    ) -> Dict:
+        """
+        Размещение лимитного ордера с небольшим offset от рыночной цены.
+        Покупка: цена чуть выше best bid. Продажа: цена чуть ниже best ask.
+        
+        Args:
+            symbol: Торговая пара
+            side: Buy или Sell
+            qty: Количество
+            current_price: Текущая рыночная цена
+            offset_pct: Смещение от рыночной цены в %
+        """
+        # Получаем orderbook для лучшей цены
+        ob = self.get_orderbook(symbol)
+        
+        if side == "Buy":
+            if ob:
+                # Покупаем чуть выше best bid
+                price = ob["best_bid"] * (1 + offset_pct / 100)
+            else:
+                # Fallback: чуть ниже текущей цены
+                price = current_price * (1 - offset_pct / 100)
+        else:  # Sell
+            if ob:
+                # Продаём чуть ниже best ask
+                price = ob["best_ask"] * (1 - offset_pct / 100)
+            else:
+                # Fallback: чуть выше текущей цены
+                price = current_price * (1 + offset_pct / 100)
+        
+        logger.info(f"Limit order {side} {symbol}: qty={qty:.6f}, price={price:.2f}")
+        return self.place_order(
+            symbol=symbol, side=side, qty=qty,
+            price=price, order_type="Limit"
+        )
+    
     def get_current_price(self, symbol: str) -> Optional[float]:
         """
         Получение текущей цены для символа.
